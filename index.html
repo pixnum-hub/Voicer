@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Voicer</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#e11d48">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Voicer">
+<style>
+:root{
+  --bg:#f4f5f7; --surface:#ffffff; --text:#1a1a1a; --muted:#6b7280;
+  --accent:#e11d48; --accent2:#2563eb; --border:#e2e4e8; --shadow:0 4px 16px rgba(0,0,0,.08);
+  --good:#16a34a; --warn:#eab308; --bad:#dc2626;
+}
+[data-theme="dark"]{
+  --bg:#15161a; --surface:#1f2126; --text:#eceef1; --muted:#9aa0aa;
+  --accent:#f43f5e; --accent2:#3b82f6; --border:#2c2f36; --shadow:0 4px 16px rgba(0,0,0,.4);
+}
+[data-theme="oled"]{
+  --bg:#000000; --surface:#0a0a0a; --text:#f2f2f2; --muted:#8a8a8a;
+  --accent:#ff375f; --accent2:#0a84ff; --border:#1c1c1c; --shadow:0 0 0 1px #1c1c1c;
+}
+[data-theme="hc"]{
+  --bg:#000000; --surface:#000000; --text:#ffffff; --muted:#ffffff;
+  --accent:#ffff00; --accent2:#00ffff; --border:#ffffff; --shadow:none;
+  --good:#00ff00; --warn:#ffff00; --bad:#ff0000;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  min-height:100dvh; display:flex; flex-direction:column; transition:background .25s,color .25s;
+}
+header{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border);}
+h1{font-size:18px; font-weight:700;}
+.theme-toggle{display:flex; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px;}
+.theme-toggle button{border:none; background:transparent; color:var(--muted); font-size:14px; padding:6px 8px; border-radius:7px; cursor:pointer; line-height:1;}
+.theme-toggle button.active{background:var(--accent2); color:#fff;}
+[data-theme="hc"] .theme-toggle button.active{background:var(--accent); color:#000; font-weight:700;}
+main{flex:1; display:flex; flex-direction:column; align-items:center; padding:24px 16px; gap:16px; max-width:480px; margin:0 auto; width:100%;}
+.status{font-size:14px; color:var(--muted); min-height:20px; text-align:center;}
+.timer{font-size:44px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:1px;}
+canvas{width:100%; max-width:440px; height:80px; background:var(--surface); border:1px solid var(--border); border-radius:12px;}
+#pitchViz{height:34px;}
+.batt-warn{font-size:12px; color:var(--bad); display:none; text-align:center;}
+.meter-wrap{width:100%; max-width:440px; height:10px; background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden;}
+.meter-bar{height:100%; width:0%; background:var(--good); transition:width .06s linear, background .1s;}
+.meter-label{font-size:11px; color:var(--muted); align-self:flex-start; max-width:440px; margin:-8px auto 0;}
+.record-btn{width:88px; height:88px; border-radius:50%; border:none; background:var(--accent); box-shadow:var(--shadow); cursor:pointer; position:relative; transition:transform .15s;}
+.record-btn:active{transform:scale(.94);}
+.record-btn::before{content:""; position:absolute; inset:32px; background:#fff; border-radius:6px; transition:.2s;}
+.record-btn.recording::before{border-radius:50%; inset:26px; background:#fff;}
+[data-theme="hc"] .record-btn{border:2px solid #fff;}
+.controls{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap;}
+.btn{background:var(--surface); color:var(--text); border:1px solid var(--border); padding:10px 16px; border-radius:10px; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:6px;}
+.btn:disabled{opacity:.45; cursor:not-allowed;}
+.btn.primary{background:var(--accent2); color:#fff; border-color:var(--accent2);}
+.btn.small{padding:5px 10px; font-size:12px;}
+.btn.active{background:var(--accent2); color:#fff;}
+.fx-panel{width:100%; max-width:440px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; display:none; flex-direction:column; gap:12px;}
+.fx-panel.open{display:flex;}
+.fx-row{display:flex; flex-direction:column; gap:4px;}
+.fx-row .fx-label{display:flex; justify-content:space-between; font-size:12px; color:var(--muted);}
+.fx-row input[type="range"]{width:100%; accent-color:var(--accent2);}
+.fx-toggle-row{display:flex; align-items:center; justify-content:space-between; font-size:13px;}
+.fx-toggle-row input{accent-color:var(--accent2); width:18px; height:18px;}
+.fx-actions{display:flex; justify-content:flex-end;}
+.fx-section{font-size:13px; font-weight:700; padding-top:10px; border-top:1px solid var(--border);}
+.fx-section.first{border-top:none; padding-top:0;}
+.fx-row select{width:100%; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:13px;}
+.list{width:100%; max-width:440px; display:flex; flex-direction:column; gap:10px;}
+.item{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px;}
+.item-top{display:flex; justify-content:space-between; align-items:center; font-size:13px; gap:8px;}
+.title{font-weight:600; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:transparent; border:none; color:var(--text); font-family:inherit;}
+.title:focus{outline:1px solid var(--accent2); border-radius:4px;}
+.badges{display:flex; gap:6px; font-size:11px; color:var(--muted); flex-wrap:wrap;}
+.badge{border:1px solid var(--border); border-radius:6px; padding:2px 6px;}
+.badge.noise-low{color:var(--good);} .badge.noise-medium{color:var(--warn);} .badge.noise-high{color:var(--bad);}
+.item audio{width:100%; height:34px;}
+.item-actions{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;}
+.item-actions button{background:transparent; border:1px solid var(--border); color:var(--text); border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer;}
+.empty{color:var(--muted); font-size:14px; text-align:center; padding:20px 0;}
+.thread-head{font-size:12px; font-weight:700; color:var(--accent2); padding:2px 4px;}
+footer{text-align:center; padding:16px; font-size:12px; color:var(--muted); border-top:1px solid var(--border); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎙️ Voicer</h1>
+  <div class="theme-toggle" id="themeToggle">
+    <button data-t="light" title="Light">☀️</button>
+    <button data-t="dark" title="Dark">🌙</button>
+    <button data-t="oled" title="OLED">⚫</button>
+    <button data-t="hc" title="High Contrast">◐</button>
+  </div>
+</header>
+<main>
+  <div class="status" id="status">Tap the button to start recording</div>
+  <div class="timer" id="timer">00:00</div>
+  <canvas id="viz" width="440" height="80"></canvas>
+  <canvas id="pitchViz" width="440" height="34"></canvas>
+  <div class="meter-wrap"><div class="meter-bar" id="meterBar"></div></div>
+  <div class="meter-label" id="meterLabel">Input level</div>
+  <div class="batt-warn" id="battWarn"></div>
+  <button class="record-btn" id="recordBtn" aria-label="Record"></button>
+  <div class="controls">
+    <button class="btn" id="pauseBtn" disabled>⏸ Pause</button>
+    <button class="btn primary" id="stopBtn" disabled>⏹ Stop & Save</button>
+    <button class="btn" id="fxToggle">🎚 Studio FX</button>
+    <button class="btn" id="settingsToggle">⚙ Settings</button>
+  </div>
+  <div class="fx-panel" id="settingsPanel">
+    <div class="fx-section first">🎙 Recording</div>
+    <div class="fx-row"><div class="fx-label"><span>Microphone</span></div><select id="setMic"><option value="">Default</option></select></div>
+    <div class="fx-row"><div class="fx-label"><span>Quality</span></div>
+      <select id="setBitrate"><option value="64000">Low (64 kbps)</option><option value="128000">Standard (128 kbps)</option><option value="256000">High (256 kbps)</option></select></div>
+    <div class="fx-row"><div class="fx-label"><span>Countdown</span></div>
+      <select id="setCountdown"><option value="0">Off</option><option value="3">3 seconds</option><option value="5">5 seconds</option></select></div>
+    <div class="fx-row"><div class="fx-label"><span>Auto-stop after</span></div>
+      <select id="setMaxDur"><option value="0">No limit</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="600">10 minutes</option></select></div>
+    <div class="fx-section">🔊 Audio</div>
+    <div class="fx-toggle-row"><span>Noise Suppression</span><input type="checkbox" id="setNoise"></div>
+    <div class="fx-toggle-row"><span>Echo Cancellation</span><input type="checkbox" id="setEcho"></div>
+    <div class="fx-toggle-row"><span>Auto Gain Control</span><input type="checkbox" id="setAgc"></div>
+    <div class="fx-row"><div class="fx-label"><span>Sample Rate</span></div>
+      <select id="setSampleRate"><option value="44100">44.1 kHz (Standard)</option><option value="48000">48 kHz (High)</option><option value="16000">16 kHz (Small file)</option></select></div>
+    <div class="fx-section">▶ Playback</div>
+    <div class="fx-row"><div class="fx-label"><span>Default Speed</span><span id="setSpeedVal">1x</span></div><input type="range" id="setSpeed" min="0.5" max="2" step="0.25" value="1"></div>
+    <div class="fx-toggle-row"><span>Auto-play Next</span><input type="checkbox" id="setAutoplay"></div>
+    <div class="fx-toggle-row"><span>Loop Recording</span><input type="checkbox" id="setLoop"></div>
+    <div class="fx-actions"><button class="btn small" id="settingsReset">Reset</button></div>
+  </div>
+  <div class="fx-panel" id="fxPanel">
+    <div class="fx-row"><div class="fx-label"><span>Bass</span><span id="fxBassVal">0</span></div><input type="range" id="fxBass" min="-10" max="10" value="0"></div>
+    <div class="fx-row"><div class="fx-label"><span>Treble / Clarity</span><span id="fxTrebleVal">0</span></div><input type="range" id="fxTreble" min="-10" max="10" value="0"></div>
+    <div class="fx-row"><div class="fx-label"><span>Stereo Width</span><span id="fxWidthVal">0%</span></div><input type="range" id="fxWidth" min="0" max="100" value="0"></div>
+    <div class="fx-row"><div class="fx-label"><span>Spaciousness</span><span id="fxSpaceVal">0%</span></div><input type="range" id="fxSpace" min="0" max="100" value="0"></div>
+    <div class="fx-toggle-row"><span>Loudness Leveling</span><input type="checkbox" id="fxLoud"></div>
+    <div class="fx-actions"><button class="btn small" id="fxReset">Reset</button></div>
+  </div>
+  <div class="list" id="list"></div>
+</main>
+<footer>
+  <div>© Manik Roy <span id="year"></span>. All Rights Reserved.</div>
+</footer>
+<script>
+const $ = id => document.getElementById(id);
+const themeToggle = $('themeToggle'), recordBtn = $('recordBtn'), pauseBtn = $('pauseBtn'),
+      stopBtn = $('stopBtn'), status = $('status'), timerEl = $('timer'), list = $('list'),
+      canvas = $('viz'), ctx = canvas.getContext('2d'), meterBar = $('meterBar'), meterLabel = $('meterLabel');
+$('year').textContent = new Date().getFullYear();
+// ---- Theme ----
+const THEME_KEY = 'voicer_theme';
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem(THEME_KEY, t);
+  [...themeToggle.children].forEach(b => b.classList.toggle('active', b.dataset.t === t));
+}
+themeToggle.addEventListener('click', e => { const b = e.target.closest('button'); if(b) applyTheme(b.dataset.t); });
+applyTheme(localStorage.getItem(THEME_KEY) || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+// ---- State ----
+let mediaRecorder, stream, chunks = [], startTime, timerInterval, paused = false, elapsed = 0;
+let audioCtx, analyser, sourceNode, animId;
+let rmsSamples = [], baselineSamples = [], recognizer, autoTitle = '', maxDurTimeout;
+let pitchHistory = [], frameCount = 0, battery;
+const pitchCanvas = $('pitchViz'), pctx = pitchCanvas.getContext('2d'), battWarn = $('battWarn');
+const RECORDINGS_KEY = 'voicer_recordings';
+function fmtTime(sec){ return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(Math.floor(sec%60)).padStart(2,'0')}`; }
+function rms(dataArray){
+  let sum = 0;
+  for(let i=0;i<dataArray.length;i++){ const v = (dataArray[i]-128)/128; sum += v*v; }
+  return Math.sqrt(sum/dataArray.length);
+}
+// #15 lightweight autocorrelation pitch detector (approximate, not lab-grade)
+function detectPitch(buf, sampleRate){
+  const SIZE = buf.length;
+  let rmsv = 0; for(let i=0;i<SIZE;i++) rmsv += buf[i]*buf[i]; rmsv = Math.sqrt(rmsv/SIZE);
+  if(rmsv < 0.02) return -1;
+  const c = new Float32Array(SIZE);
+  for(let lag=0; lag<SIZE; lag++){ let s=0; for(let i=0;i<SIZE-lag;i+=2) s += buf[i]*buf[i+lag]; c[lag]=s; }
+  let d = 0; while(d < SIZE-1 && c[d] > c[d+1]) d++;
+  let maxVal = -1, maxPos = -1;
+  for(let i=d;i<SIZE;i++){ if(c[i] > maxVal){ maxVal = c[i]; maxPos = i; } }
+  return maxPos > 0 ? sampleRate / maxPos : -1;
+}
+function drawPitch(){
+  pctx.clearRect(0,0,pitchCanvas.width,pitchCanvas.height);
+  pctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+  pctx.lineWidth = 2; pctx.beginPath();
+  const w = pitchCanvas.width / 120; let started = false;
+  pitchHistory.forEach((f,i) => {
+    if(f <= 0){ started = false; return; }
+    const clamped = Math.min(500, Math.max(80, f));
+    const y = pitchCanvas.height - ((clamped-80)/(500-80)) * pitchCanvas.height;
+    started ? pctx.lineTo(i*w, y) : (pctx.moveTo(i*w, y), started = true);
+  });
+  pctx.stroke();
+}
+// #1 mood waveform + #9 gain meter, driven by one loop
+function drawViz(){
+  animId = requestAnimationFrame(drawViz);
+  if(!analyser) return;
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  analyser.getByteTimeDomainData(dataArray);
+  const level = rms(dataArray);
+  rmsSamples.push(level);
+  if(elapsed < 0.8) baselineSamples.push(level);
+  // #1 mood color: blue (calm) -> orange/red (loud/excited)
+  const hue = Math.max(0, 240 - level*900);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = `hsl(${hue},75%,55%)`;
+  ctx.beginPath();
+  const slice = canvas.width / bufferLength;
+  let x = 0;
+  for(let i=0;i<bufferLength;i++){
+    const v = dataArray[i]/128.0, y = v * canvas.height/2;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    x += slice;
+  }
+  ctx.stroke();
+  frameCount++;
+  if(frameCount % 3 === 0){
+    const floatBuf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(floatBuf);
+    pitchHistory.push(detectPitch(floatBuf.subarray(0,700), audioCtx.sampleRate));
+    if(pitchHistory.length > 120) pitchHistory.shift();
+    drawPitch();
+  }
+  // #9 gain meter with clipping / too-quiet warning
+  const pct = Math.min(100, level*220);
+  meterBar.style.width = pct + '%';
+  if(level > 0.42){ meterBar.style.background = 'var(--bad)'; meterLabel.textContent = '⚠ Too loud — back off the mic'; }
+  else if(level < 0.02){ meterBar.style.background = 'var(--muted)'; meterLabel.textContent = '⚠ Too quiet — move closer'; }
+  else if(level > 0.28){ meterBar.style.background = 'var(--warn)'; meterLabel.textContent = 'Input level — a bit hot'; }
+  else { meterBar.style.background = 'var(--good)'; meterLabel.textContent = 'Input level — good'; }
+}
+// #5 ambient noise fingerprint
+function noiseFingerprint(){
+  if(!baselineSamples.length) return { label: 'Unknown', cls: '' };
+  const avg = baselineSamples.reduce((a,b)=>a+b,0) / baselineSamples.length;
+  if(avg < 0.03) return { label: 'Low noise', cls: 'noise-low' };
+  if(avg < 0.08) return { label: 'Medium noise', cls: 'noise-medium' };
+  return { label: 'High noise', cls: 'noise-high' };
+}
+// #7 auto-title from first spoken words (on-device browser Speech API, no key/registration)
+function startAutoTitle(){
+  autoTitle = '';
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return;
+  recognizer = new SR();
+  recognizer.continuous = true; recognizer.interimResults = false; recognizer.lang = 'en-US';
+  recognizer.onresult = e => {
+    if(autoTitle) return;
+    const text = e.results[e.results.length-1][0].transcript.trim().split(/\s+/).slice(0,6).join(' ');
+    if(text) autoTitle = text.charAt(0).toUpperCase() + text.slice(1);
+  };
+  recognizer.onerror = () => {};
+  try{ recognizer.start(); }catch(_){}
+}
+function stopAutoTitle(){ if(recognizer){ try{ recognizer.stop(); }catch(_){} recognizer = null; } }
+// #23 battery-aware recording warning (Battery Status API where supported)
+function checkBattery(){
+  if(!navigator.getBattery) return;
+  navigator.getBattery().then(b => {
+    battery = b;
+    const update = () => {
+      if(mediaRecorder && mediaRecorder.state !== 'inactive' && battery.level < 0.15 && !battery.charging){
+        battWarn.textContent = `⚠ Low battery (${Math.round(battery.level*100)}%) — recording may be interrupted`;
+        battWarn.style.display = 'block';
+      } else battWarn.style.display = 'none';
+    };
+    battery.onlevelchange = update; battery.onchargingchange = update; update();
+  }).catch(() => {});
+}
+function startRecording(){
+  if(appSettings.countdown > 0){
+    let n = appSettings.countdown;
+    recordBtn.disabled = true; status.textContent = `Starting in ${n}…`;
+    const iv = setInterval(() => {
+      n--;
+      if(n <= 0){ clearInterval(iv); recordBtn.disabled = false; doStartRecording(); }
+      else status.textContent = `Starting in ${n}…`;
+    }, 1000);
+  } else doStartRecording();
+}
+async function doStartRecording(){
+  const audio = { echoCancellation: appSettings.echo, noiseSuppression: appSettings.noise, autoGainControl: appSettings.agc, sampleRate: appSettings.sampleRate };
+  if(appSettings.mic) audio.deviceId = { exact: appSettings.mic };
+  try{ stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+  catch(err){ status.textContent = 'Microphone access denied'; return; }
+  chunks = []; rmsSamples = []; baselineSamples = []; pitchHistory = []; frameCount = 0;
+  checkBattery();
+  const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+  const opts = { audioBitsPerSecond: appSettings.bitrate }; if(mime) opts.mimeType = mime;
+  mediaRecorder = new MediaRecorder(stream, opts);
+  mediaRecorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+  mediaRecorder.onstop = saveRecording;
+  mediaRecorder.start();
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+  sourceNode = audioCtx.createMediaStreamSource(stream);
+  sourceNode.connect(analyser);
+  drawViz();
+  startAutoTitle();
+  elapsed = 0; paused = false; startTime = Date.now();
+  timerInterval = setInterval(() => { if(!paused){ elapsed = (Date.now()-startTime)/1000; timerEl.textContent = fmtTime(elapsed); } }, 200);
+  if(appSettings.maxDur > 0) maxDurTimeout = setTimeout(() => stopRecording(), appSettings.maxDur * 1000);
+  recordBtn.classList.add('recording');
+  status.textContent = 'Recording…';
+  pauseBtn.disabled = false; stopBtn.disabled = false;
+}
+function togglePause(){
+  if(!mediaRecorder) return;
+  if(paused){ mediaRecorder.resume(); startTime = Date.now()-elapsed*1000; paused = false; pauseBtn.textContent = '⏸ Pause'; status.textContent = 'Recording…'; }
+  else{ mediaRecorder.pause(); paused = true; pauseBtn.textContent = '▶ Resume'; status.textContent = 'Paused'; }
+}
+function stopRecording(){
+  if(!mediaRecorder) return;
+  mediaRecorder.stop();
+  stream.getTracks().forEach(t => t.stop());
+  clearInterval(timerInterval);
+  clearTimeout(maxDurTimeout);
+  cancelAnimationFrame(animId);
+  if(audioCtx) audioCtx.close();
+  stopAutoTitle();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  pctx.clearRect(0,0,pitchCanvas.width,pitchCanvas.height);
+  battWarn.style.display = 'none';
+  meterBar.style.width = '0%'; meterLabel.textContent = 'Input level';
+  recordBtn.classList.remove('recording');
+  pauseBtn.disabled = true; pauseBtn.textContent = '⏸ Pause';
+  stopBtn.disabled = true;
+  status.textContent = 'Tap the button to start recording';
+  timerEl.textContent = '00:00';
+}
+async function saveRecording(){
+  const blob = new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' });
+  const noise = noiseFingerprint();
+  const reader = new FileReader();
+  reader.onload = () => {
+    const recs = JSON.parse(localStorage.getItem(RECORDINGS_KEY) || '[]');
+    recs.unshift({
+      id: Date.now(), createdAt: Date.now(), date: new Date().toLocaleString(), duration: fmtTime(elapsed),
+      data: reader.result, title: autoTitle || 'Untitled recording',
+      noiseLabel: noise.label, noiseCls: noise.cls, thread: '', sd: { type:'none' }
+    });
+    localStorage.setItem(RECORDINGS_KEY, JSON.stringify(recs.slice(0,30)));
+    renderList();
+  };
+  reader.readAsDataURL(blob);
+}
+// #2 silence-skip: decode → drop low-RMS chunks → re-encode as WAV
+function audioBufferToWav(buffer){
+  const numCh = buffer.numberOfChannels, len = buffer.length * numCh * 2 + 44;
+  const bufArr = new ArrayBuffer(len), view = new DataView(bufArr);
+  const writeStr = (o,s) => { for(let i=0;i<s.length;i++) view.setUint8(o+i, s.charCodeAt(i)); };
+  writeStr(0,'RIFF'); view.setUint32(4, len-8, true); writeStr(8,'WAVE'); writeStr(12,'fmt ');
+  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,numCh,true);
+  view.setUint32(24,buffer.sampleRate,true); view.setUint32(28,buffer.sampleRate*numCh*2,true);
+  view.setUint16(32,numCh*2,true); view.setUint16(34,16,true); writeStr(36,'data'); view.setUint32(40,len-44,true);
+  let off = 44;
+  for(let i=0;i<buffer.length;i++){
+    for(let c=0;c<numCh;c++){
+      let s = Math.max(-1,Math.min(1,buffer.getChannelData(c)[i]));
+      view.setInt16(off, s<0 ? s*0x8000 : s*0x7FFF, true); off += 2;
+    }
+  }
+  return new Blob([bufArr], { type: 'audio/wav' });
+}
+async function skipSilenceBlob(dataUrl){
+  const res = await fetch(dataUrl); const arrBuf = await res.arrayBuffer();
+  const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const audioBuf = await tmpCtx.decodeAudioData(arrBuf);
+  const chunkSize = Math.floor(audioBuf.sampleRate * 0.05); // 50ms chunks
+  const ch0 = audioBuf.getChannelData(0);
+  const keep = [];
+  for(let i=0;i<ch0.length;i+=chunkSize){
+    let sum = 0, n = 0;
+    for(let j=i;j<Math.min(i+chunkSize,ch0.length);j++){ sum += ch0[j]*ch0[j]; n++; }
+    if(Math.sqrt(sum/n) > 0.015) keep.push([i, Math.min(i+chunkSize,ch0.length)]);
+  }
+  const totalLen = keep.reduce((a,[s,e])=>a+(e-s),0) || ch0.length;
+  const out = tmpCtx.createBuffer(audioBuf.numberOfChannels, totalLen, audioBuf.sampleRate);
+  for(let c=0;c<audioBuf.numberOfChannels;c++){
+    const src = audioBuf.getChannelData(c), dst = out.getChannelData(c);
+    let pos = 0;
+    for(const [s,e] of keep){ dst.set(src.subarray(s,e), pos); pos += (e-s); }
+  }
+  tmpCtx.close();
+  return URL.createObjectURL(audioBufferToWav(out));
+}
+// #12 export as ringtone: auto-finds the most energetic ~15s window and exports it
+async function exportRingtone(rec){
+  const res = await fetch(rec.data); const arrBuf = await res.arrayBuffer();
+  const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const audioBuf = await tmpCtx.decodeAudioData(arrBuf);
+  const winSec = Math.min(15, audioBuf.duration);
+  const winSamples = Math.floor(winSec * audioBuf.sampleRate);
+  const ch0 = audioBuf.getChannelData(0);
+  const step = Math.floor(audioBuf.sampleRate * 0.5);
+  let bestStart = 0, bestEnergy = -1;
+  for(let s=0; s + winSamples <= ch0.length; s += step){
+    let sum = 0; for(let i=s;i<s+winSamples;i+=10) sum += ch0[i]*ch0[i];
+    if(sum > bestEnergy){ bestEnergy = sum; bestStart = s; }
+  }
+  const out = tmpCtx.createBuffer(audioBuf.numberOfChannels, winSamples, audioBuf.sampleRate);
+  for(let c=0;c<audioBuf.numberOfChannels;c++) out.getChannelData(c).set(audioBuf.getChannelData(c).subarray(bestStart, bestStart+winSamples));
+  tmpCtx.close();
+  const blob = audioBufferToWav(out);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `${(rec.title||'ringtone').replace(/\s+/g,'_')}-ringtone.wav`; a.click();
+}
+function isExpired(r){
+  if(!r.sd || r.sd.type === 'none') return false;
+  if(r.sd.type === 'plays') return (r.sd.count||0) >= r.sd.value;
+  if(r.sd.type === 'days') return (Date.now() - r.createdAt) >= r.sd.value * 86400000;
+  return false;
+}
+function renderList(){
+  let recs = JSON.parse(localStorage.getItem(RECORDINGS_KEY) || '[]');
+  const before = recs.length;
+  recs = recs.filter(r => !isExpired(r));
+  if(recs.length !== before) localStorage.setItem(RECORDINGS_KEY, JSON.stringify(recs));
+  if(!recs.length){ list.innerHTML = '<div class="empty">No recordings yet</div>'; return; }
+  let lastThread = null, html = '';
+  recs.forEach(r => {
+    if(r.thread && r.thread !== lastThread) html += `<div class="thread-head">🔗 ${r.thread}</div>`;
+    lastThread = r.thread || null;
+    const sd = r.sd && r.sd.type !== 'none' ? `<span class="badge">⏳ ${r.sd.type==='plays' ? (r.sd.value-(r.sd.count||0))+' plays left' : r.sd.value+'d left'}</span>` : '';
+    html += `
+    <div class="item" data-id="${r.id}">
+      <div class="item-top">
+        <input class="title" value="${(r.title||'Untitled recording').replace(/"/g,'&quot;')}" data-act="rename">
+        <span>${r.duration}</span>
+      </div>
+      <div class="badges"><span class="badge ${r.noiseCls||''}">${r.noiseLabel||'Unknown'}</span><span class="badge">${r.date}</span>${sd}</div>
+      <audio controls src="${r.data}"></audio>
+      <div class="fx-row"><div class="fx-label"><span>Speed</span><span class="spd-val">1x</span></div><input type="range" class="item-speed" min="0.25" max="3" step="0.05" value="1"></div>
+      <div class="item-actions">
+        <button class="small" data-act="skip">🔇 Skip Silence</button>
+        <button class="small" data-act="ring">🎵 Ringtone</button>
+        <button class="small" data-act="thread">🔗 Thread</button>
+        <select class="small" data-act="sd"><option value="none">⏳ Never</option><option value="plays:1">1 play</option><option value="plays:3">3 plays</option><option value="days:1">1 day</option><option value="days:7">7 days</option></select>
+        <button class="small" data-act="dl">⬇ Download</button>
+        <button class="small" data-act="del">🗑 Delete</button>
+      </div>
+    </div>`;
+  });
+  list.innerHTML = html;
+  applyPlaybackSettingsToAll();
+}
+list.addEventListener('click', async e => {
+  const btn = e.target.closest('button'); if(!btn) return;
+  const itemEl = btn.closest('.item'); const id = Number(itemEl.dataset.id);
+  const recs = JSON.parse(localStorage.getItem(RECORDINGS_KEY) || '[]');
+  const rec = recs.find(r => r.id === id);
+  if(btn.dataset.act === 'del'){
+    localStorage.setItem(RECORDINGS_KEY, JSON.stringify(recs.filter(r => r.id !== id)));
+    renderList();
+  }else if(btn.dataset.act === 'dl'){
+    const a = document.createElement('a'); a.href = rec.data; a.download = `${(rec.title||'recording').replace(/\s+/g,'_')}.webm`; a.click();
+  }else if(btn.dataset.act === 'skip'){
+    btn.disabled = true; btn.textContent = 'Processing…';
+    try{
+      const trimmedUrl = await skipSilenceBlob(rec.data);
+      itemEl.querySelector('audio').src = trimmedUrl;
+      btn.textContent = '✓ Silence removed';
+    }catch(err){ btn.textContent = '⚠ Failed'; }
+  }else if(btn.dataset.act === 'ring'){
+    btn.disabled = true; btn.textContent = 'Finding hook…';
+    try{ await exportRingtone(rec); btn.textContent = '✓ Exported'; }
+    catch(err){ btn.textContent = '⚠ Failed'; }
+    btn.disabled = false;
+  }else if(btn.dataset.act === 'thread'){
+    const name = prompt('Thread name (leave blank to remove from thread):', rec.thread || '');
+    if(name !== null){
+      rec.thread = name.trim();
+      localStorage.setItem(RECORDINGS_KEY, JSON.stringify(recs));
+      renderList();
+    }
+  }
+});
+list.addEventListener('change', e => {
+  const itemEl = e.target.closest('.item'); if(!itemEl) return;
+  const id = Number(itemEl.dataset.id);
+  const recs = JSON.parse(localStorage.getItem(RECORDINGS_KEY) || '[]');
+  const rec = recs.find(r => r.id === id);
+  if(!rec) return;
+  if(e.target.dataset.act === 'rename'){
+    rec.title = e.target.value.trim() || 'Untitled recording'; localStorage.setItem(RECORDINGS_KEY, JSON.stringify(recs));
+  }else if(e.target.dataset.act === 'sd'){
+    const [type, value] = e.target.value.split(':');
+    rec.sd = type === 'none' ? { type:'none' } : { type, value:+value, count:0 };
+    localStorage.setItem(RECORDINGS_KEY, JSON.stringify(recs));
+    renderList();
+  }
+});
+list.addEventListener('input', e => {
+  if(!e.target.classList.contains('item-speed')) return;
+  const audioEl = e.target.closest('.item').querySelector('audio');
+  audioEl.playbackRate = +e.target.value;
+  audioEl.preservesPitch = audioEl.mozPreservesPitch = audioEl.webkitPreservesPitch = true;
+  e.target.closest('.fx-row').querySelector('.spd-val').textContent = (+e.target.value).toFixed(2) + 'x';
+});
+list.addEventListener('play', e => {
+  if(e.target.tagName !== 'AUDIO') return;
+  const id = Number(e.target.closest('.item').dataset.id);
+  const recs = JSON.parse(localStorage.getItem(RECORDINGS_KEY) || '[]');
+  const rec = recs.find(r => r.id === id);
+  if(rec && rec.sd && rec.sd.type === 'plays'){
+    rec.sd.count = (rec.sd.count||0) + 1;
+    localStorage.setItem(RECORDINGS_KEY, JSON.stringify(recs));
+  }
+}, true);
+recordBtn.addEventListener('click', () => { if(!mediaRecorder || mediaRecorder.state === 'inactive') startRecording(); });
+pauseBtn.addEventListener('click', togglePause);
+stopBtn.addEventListener('click', stopRecording);
+// ---- Studio Sound FX (bass/treble/width/space/loudness via Web Audio) ----
+const FX_KEY = 'voicer_fx';
+const fxPanel = $('fxPanel'), fxToggle = $('fxToggle');
+const fxBass = $('fxBass'), fxTreble = $('fxTreble'), fxWidth = $('fxWidth'), fxSpace = $('fxSpace'), fxLoud = $('fxLoud');
+let fxSettings = Object.assign({ bass:0, treble:0, width:0, space:0, loud:false }, JSON.parse(localStorage.getItem(FX_KEY) || '{}'));
+let fxCtx, fxImpulse, fxGraphs = [];
+function fxSyncUI(){
+  fxBass.value = fxSettings.bass; $('fxBassVal').textContent = fxSettings.bass;
+  fxTreble.value = fxSettings.treble; $('fxTrebleVal').textContent = fxSettings.treble;
+  fxWidth.value = fxSettings.width; $('fxWidthVal').textContent = fxSettings.width + '%';
+  fxSpace.value = fxSettings.space; $('fxSpaceVal').textContent = fxSettings.space + '%';
+  fxLoud.checked = fxSettings.loud;
+}
+fxSyncUI();
+fxToggle.addEventListener('click', () => { $('settingsPanel').classList.remove('open'); fxPanel.classList.toggle('open'); });
+function getImpulse(ctx){
+  if(fxImpulse) return fxImpulse;
+  const len = ctx.sampleRate * 1.4;
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for(let c=0;c<2;c++){ const d = buf.getChannelData(c); for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.5); }
+  fxImpulse = buf; return buf;
+}
+function buildGraph(audioEl){
+  if(!fxCtx) fxCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = fxCtx.createMediaElementSource(audioEl);
+  const bass = fxCtx.createBiquadFilter(); bass.type = 'lowshelf'; bass.frequency.value = 200;
+  const treble = fxCtx.createBiquadFilter(); treble.type = 'highshelf'; treble.frequency.value = 3200;
+  const comp = fxCtx.createDynamicsCompressor();
+  const delay = fxCtx.createDelay(0.05);
+  const merger = fxCtx.createChannelMerger(2);
+  const dryGain = fxCtx.createGain(), wetGain = fxCtx.createGain();
+  const convolver = fxCtx.createConvolver(); convolver.buffer = getImpulse(fxCtx);
+  src.connect(bass); bass.connect(treble); treble.connect(comp);
+  comp.connect(merger, 0, 0); comp.connect(merger, 0, 1);
+  comp.connect(delay); delay.connect(merger, 0, 1);
+  merger.connect(dryGain); dryGain.connect(fxCtx.destination);
+  merger.connect(convolver); convolver.connect(wetGain); wetGain.connect(fxCtx.destination);
+  const g = { bass, treble, comp, delay, dryGain, wetGain };
+  fxGraphs.push(g); applyFxToGraph(g);
+  return g;
+}
+function applyFxToGraph(g){
+  g.bass.gain.value = fxSettings.bass;
+  g.treble.gain.value = fxSettings.treble;
+  g.delay.delayTime.value = (fxSettings.width / 100) * 0.03;
+  g.dryGain.gain.value = 1 - (fxSettings.space / 100) * 0.55;
+  g.wetGain.gain.value = (fxSettings.space / 100) * 0.5;
+  if(fxSettings.loud){ g.comp.threshold.value = -32; g.comp.ratio.value = 6; }
+  else{ g.comp.threshold.value = 0; g.comp.ratio.value = 1; }
+}
+function fxUpdateAll(){ fxGraphs.forEach(applyFxToGraph); localStorage.setItem(FX_KEY, JSON.stringify(fxSettings)); }
+[fxBass, fxTreble, fxWidth, fxSpace].forEach(el => el.addEventListener('input', () => {
+  fxSettings.bass = +fxBass.value; fxSettings.treble = +fxTreble.value;
+  fxSettings.width = +fxWidth.value; fxSettings.space = +fxSpace.value;
+  fxSyncUI(); fxUpdateAll();
+}));
+fxLoud.addEventListener('change', () => { fxSettings.loud = fxLoud.checked; fxUpdateAll(); });
+$('fxReset').addEventListener('click', () => {
+  fxSettings = { bass:0, treble:0, width:0, space:0, loud:false }; fxSyncUI(); fxUpdateAll();
+});
+list.addEventListener('play', e => {
+  const audioEl = e.target; if(audioEl.tagName !== 'AUDIO') return;
+  if(fxCtx && fxCtx.state === 'suspended') fxCtx.resume();
+  if(!audioEl.dataset.fxWired){ audioEl.dataset.fxWired = '1'; buildGraph(audioEl); }
+}, true);
+// ---- Recording / Audio / Playback settings ----
+const SETTINGS_KEY = 'voicer_settings';
+const settingsPanel = $('settingsPanel'), settingsToggle = $('settingsToggle');
+let appSettings = Object.assign({ mic:'', bitrate:128000, countdown:0, maxDur:0, noise:true, echo:true, agc:true, sampleRate:44100, speed:1, autoplay:false, loop:false }, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
+function settingsSyncUI(){
+  $('setBitrate').value = appSettings.bitrate; $('setCountdown').value = appSettings.countdown; $('setMaxDur').value = appSettings.maxDur;
+  $('setNoise').checked = appSettings.noise; $('setEcho').checked = appSettings.echo; $('setAgc').checked = appSettings.agc;
+  $('setSampleRate').value = appSettings.sampleRate;
+  $('setSpeed').value = appSettings.speed; $('setSpeedVal').textContent = appSettings.speed + 'x';
+  $('setAutoplay').checked = appSettings.autoplay; $('setLoop').checked = appSettings.loop;
+  if(appSettings.mic) $('setMic').value = appSettings.mic;
+}
+async function populateMics(){
+  try{
+    const mics = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
+    $('setMic').innerHTML = '<option value="">Default</option>' + mics.map((m,i) => `<option value="${m.deviceId}">${m.label || 'Microphone ' + (i+1)}</option>`).join('');
+    if(appSettings.mic) $('setMic').value = appSettings.mic;
+  }catch(_){}
+}
+settingsToggle.addEventListener('click', () => { fxPanel.classList.remove('open'); settingsPanel.classList.toggle('open'); if(settingsPanel.classList.contains('open')) populateMics(); });
+function applyPlaybackSettingsToAll(){ list.querySelectorAll('audio').forEach(a => { a.playbackRate = appSettings.speed; a.loop = appSettings.loop; }); }
+function saveSettings(){
+  appSettings = {
+    mic: $('setMic').value, bitrate: +$('setBitrate').value, countdown: +$('setCountdown').value, maxDur: +$('setMaxDur').value,
+    noise: $('setNoise').checked, echo: $('setEcho').checked, agc: $('setAgc').checked, sampleRate: +$('setSampleRate').value,
+    speed: +$('setSpeed').value, autoplay: $('setAutoplay').checked, loop: $('setLoop').checked
+  };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
+  applyPlaybackSettingsToAll();
+}
+['setMic','setBitrate','setCountdown','setMaxDur','setNoise','setEcho','setAgc','setSampleRate','setAutoplay','setLoop'].forEach(id => $(id).addEventListener('change', saveSettings));
+$('setSpeed').addEventListener('input', () => { $('setSpeedVal').textContent = $('setSpeed').value + 'x'; saveSettings(); });
+$('settingsReset').addEventListener('click', () => {
+  appSettings = { mic:'', bitrate:128000, countdown:0, maxDur:0, noise:true, echo:true, agc:true, sampleRate:44100, speed:1, autoplay:false, loop:false };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
+  settingsSyncUI(); applyPlaybackSettingsToAll();
+});
+list.addEventListener('ended', e => {
+  if(e.target.tagName !== 'AUDIO' || !appSettings.autoplay) return;
+  const items = [...list.querySelectorAll('.item')];
+  const idx = items.findIndex(it => it.contains(e.target));
+  const nextAudio = items[idx+1]?.querySelector('audio');
+  if(nextAudio) nextAudio.play();
+}, true);
+settingsSyncUI();
+renderList();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
